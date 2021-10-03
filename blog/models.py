@@ -39,7 +39,7 @@ class Post(models.Model):
     # Менеджеры моделей
     objects = models.Manager()  # Менеджер по умолчанию
     published = PublishedManager()  # Новый менеджер
-    tags = TaggableManager()  # менеджер тэгов
+    tags = TaggableManager()  # менеджер тегов
 
     class Meta:
         ordering = ('-publish',)  # сортировка по убыванию, самые свежие статьи сверху.
