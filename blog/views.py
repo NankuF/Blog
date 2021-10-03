@@ -2,8 +2,9 @@ from django.core.mail import send_mail
 from django.shortcuts import render, get_object_or_404
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Count
+from django.contrib.postgres.search import SearchVector, TrigramSimilarity
 from .models import Post, Comment
-from .forms import EmailPostForm, CommentForm
+from .forms import EmailPostForm, CommentForm, SearchForm
 from taggit.models import Tag
 
 
@@ -41,7 +42,7 @@ def post_detail(request, year, month, day, slug):
     post = get_object_or_404(Post, slug=slug, status='published', publish__year=year,
                              publish__month=month, publish__day=day)
     # Список активных комментариев для этой статьи.
-    comments = post.comments.filter(active=True)   # post.comments. - это related_name в таблице Comment в поле post.
+    comments = post.comments.filter(active=True)  # post.comments. - это related_name в таблице Comment в поле post.
     new_comment = None
     if request.method == 'POST':
         # Пользователь отправил комментарий.
@@ -92,3 +93,37 @@ def post_share(request, post_id):
     else:
         form = EmailPostForm()
     return render(request, 'blog/post/share.html', {'post': post, 'form': form, 'sent': sent})
+
+
+# def post_search(request):
+#     """Обрабатывает поисковый запрос - Поиск по нескольким полям"""
+#     form = SearchForm()
+#     query = None
+#     results = []
+#     # Поисковый запрос будет отправляться методом GET,
+#     # чтобы результирующий URL содержал в себе фразу поиска в параметре query.
+#     if 'query' in request.GET:   # определяем, что форма отправлена (тут нет ошибок!)
+#         form = SearchForm(request.GET)  # инициируем объект формы с параметрами из request.GET
+#         if form.is_valid():
+#             # Если форма валидна,формируем запрос на поиск статей с использованием
+#             # объекта SearchVector по двум полям: title и body.
+#             query = form.cleaned_data['query']
+#             results = Post.objects.annotate(search=SearchVector('title', 'body')).filter(search=query)
+#     return render(request, 'blog/post/search.html', {'form': form, 'query': query, 'results': results})
+
+def post_search(request):
+    """Обрабатывает поисковый запрос - Поиск по триграммам"""
+    form = SearchForm()
+    query = None
+    results = []
+    # Поисковый запрос будет отправляться методом GET,
+    # чтобы результирующий URL содержал в себе фразу поиска в параметре query.
+    if 'query' in request.GET:  # определяем, что форма отправлена (тут нет ошибок!)
+        form = SearchForm(request.GET)  # инициируем объект формы с параметрами из request.GET
+        if form.is_valid():
+            # Если форма валидна,формируем запрос на поиск статей с использованием
+            # объекта SearchVector по двум полям: title и body.
+            query = form.cleaned_data['query']
+            results = Post.objects.annotate(similarity=TrigramSimilarity('body', query)).filter(
+                similarity__gt=0.01).order_by('-similarity')  # при similarity__gt=0.02 не работает.
+    return render(request, 'blog/post/search.html', {'form': form, 'query': query, 'results': results})
